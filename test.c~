@@ -1,0 +1,87 @@
+/**
+ * $Id: test.c peter.ferjancic 2014/10/22 $
+ *
+ * @brief Red Pitaya triggered acquisition.
+ *
+ *
+ * (c) Red Pitaya  http://www.redpitaya.com
+ *
+ * This part of code is written in C programming language.
+ * Please visit http://en.wikipedia.org/wiki/C_(programming_language)
+ * for more details on the language used herein.
+ */
+
+
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <getopt.h>
+#include <string.h>
+#include <stddef.h>
+#include <sys/param.h>
+#include "fpga_osc.h"
+
+//Buffer depth 
+const int BUF = 128*1024; // 16*1024; 
+// Number of samples
+const int N = 15;
+// Decimation level sets effective sampling rate.
+// Note that only certain values are allowed!
+
+const int decimation = 8;
+
+int main(void) 
+{
+double sample_freq = 125.e6 / N;
+
+int start = osc_fpga_init();
+printf("start = %d \n", start);
+if(start) {
+    printf("osc_fpga_init didn't work, retval = %d",start);
+    return -1;
+}
+
+// set acquisition parameters
+osc_fpga_set_trigger_delay(N);
+g_osc_fpga_reg_mem->data_dec = decimation;
+
+// put sampling engine into reset
+osc_fpga_reset();
+
+int * cha_signal; 
+int * chb_signal;
+int trig_ptr;
+
+//  while(true) {
+    // start acquiring
+    osc_fpga_arm_trigger();
+
+    // trigger immediately => Stops acquiring after trig_delay
+    // then wait for the buffer to fill.
+    osc_fpga_set_trigger(0x1);
+    usleep(N/sample_freq*1e6);
+
+    // get the memory location of the trigger pointer;
+    // this points to the beginning of the buffer
+    trig_ptr = g_osc_fpga_reg_mem->wr_ptr_trigger;
+    osc_fpga_get_sig_ptr(&cha_signal, &chb_signal);
+
+
+    // now read N samples from the trigger pointer location.
+    int i;
+    int ptr;
+    for (i=0; i < N; i++) {
+        ptr = (trig_ptr+i)%BUF;
+
+        if( cha_signal[ptr] )
+            printf("%d\n",cha_signal[ptr]);
+        else
+            printf("cha_signal[%d] is NULL!",cha_signal[ptr]);
+    }
+
+
+    //  }
+    osc_fpga_exit();
+return 0;
+}
